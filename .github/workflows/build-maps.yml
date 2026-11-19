@@ -28,8 +28,13 @@ jobs:
           gh release download --repo onthegomap/planetiler --pattern "$name" --output planetiler.jar
       - name: Build tiles
         run: |
-          java -Xmx5g -jar planetiler.jar --download --area=uzbekistan \
-            --output=uzbekistan.pmtiles --maxzoom=14 --tmpdir=tmp 2>&1 | tail -40
+          # Geofabrik sometimes times out; try up to 3 times.
+          for attempt in 1 2 3; do
+            java -Xmx5g -jar planetiler.jar --download --area=uzbekistan \
+              --output=uzbekistan.pmtiles --maxzoom=14 --tmpdir=tmp --force 2>&1 | tail -40
+            [ -s uzbekistan.pmtiles ] && break
+            echo "Attempt $attempt failed, retrying"; sleep 30
+          done
           ls -l uzbekistan.pmtiles
       - name: Manifest
         run: |
