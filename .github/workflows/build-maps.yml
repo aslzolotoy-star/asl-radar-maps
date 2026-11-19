@@ -1,0 +1,49 @@
+name: Build maps
+
+# Builds the offline map of Uzbekistan from OpenStreetMap with Planetiler and
+# publishes it as a GitHub Release. Run by hand: Actions -> Build maps -> Run workflow.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  uzbekistan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Download Planetiler
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          name=$(gh release view --repo onthegomap/planetiler --json assets -q '.assets[].name' | grep -i 'openmaptiles.*\.jar$' | head -1)
+          if [ -z "$name" ]; then name=planetiler.jar; fi
+          echo "Using $name"
+          gh release download --repo onthegomap/planetiler --pattern "$name" --output planetiler.jar
+      - name: Build tiles
+        run: |
+          java -Xmx5g -jar planetiler.jar --download --area=uzbekistan \
+            --output=uzbekistan.pmtiles --maxzoom=14 --tmpdir=tmp 2>&1 | tail -40
+          ls -l uzbekistan.pmtiles
+      - name: Manifest
+        run: |
+          size=$(stat -c %s uzbekistan.pmtiles)
+          sha=$(sha256sum uzbekistan.pmtiles | cut -d' ' -f1)
+          ver=$(date -u +%Y%m%d)
+          printf '{"name":"uzbekistan","version":"%s","bytes":%s,"sha256":"%s","file":"uzbekistan.pmtiles"}\n' "$ver" "$size" "$sha" > manifest.json
+          cat manifest.json
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="maps-$(date -u +%Y%m%d-%H%M)"
+          gh release create "$tag" uzbekistan.pmtiles manifest.json \
+            --title "Uzbekistan map $tag" \
+            --notes "Map data © OpenStreetMap contributors (ODbL). Built with Planetiler." \
+            --latest
