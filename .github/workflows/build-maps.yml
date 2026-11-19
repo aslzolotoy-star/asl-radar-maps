@@ -4,9 +4,13 @@ name: Build maps
 # publishes it as a GitHub Release. Run by hand: Actions -> Build maps -> Run workflow.
 on:
   workflow_dispatch:
+  schedule:
+    # Once a month, on the 1st at 03:17 UTC.
+    - cron: "17 3 1 * *"
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   uzbekistan:
@@ -53,3 +57,14 @@ jobs:
             --title "Uzbekistan map $tag" \
             --notes "Map data © OpenStreetMap contributors (ODbL). Built with Planetiler." \
             --latest
+      - name: Keep only the two newest maps
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --limit 50 --json tagName -q '.[].tagName' | grep '^maps-' | tail -n +3 \
+            | xargs -r -I{} gh release delete {} --cleanup-tag -y
+      - name: Keep the monthly schedule alive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # GitHub pauses scheduled workflows of a quiet repository after 60 days.
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/build-maps.yml/enable"
