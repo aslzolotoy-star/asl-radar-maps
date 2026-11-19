@@ -26,15 +26,16 @@ jobs:
           if [ -z "$name" ]; then name=planetiler.jar; fi
           echo "Using $name"
           gh release download --repo onthegomap/planetiler --pattern "$name" --output planetiler.jar
+      - name: Download OSM data
+        run: |
+          mkdir -p data/sources
+          curl -fL --retry 8 --retry-all-errors --retry-delay 20 --connect-timeout 30 \
+            -o data/sources/uzbekistan.osm.pbf https://download.geofabrik.de/asia/uzbekistan-latest.osm.pbf
+          ls -l data/sources/uzbekistan.osm.pbf
       - name: Build tiles
         run: |
-          # Geofabrik sometimes times out; try up to 3 times.
-          for attempt in 1 2 3; do
-            java -Xmx5g -jar planetiler.jar --download --area=uzbekistan \
-              --output=uzbekistan.pmtiles --maxzoom=14 --tmpdir=tmp --force 2>&1 | tail -40
-            [ -s uzbekistan.pmtiles ] && break
-            echo "Attempt $attempt failed, retrying"; sleep 30
-          done
+          java -Xmx5g -jar planetiler.jar --download --osm-path=data/sources/uzbekistan.osm.pbf \
+            --output=uzbekistan.pmtiles --maxzoom=14 --tmpdir=tmp 2>&1 | tail -40
           ls -l uzbekistan.pmtiles
       - name: Manifest
         run: |
